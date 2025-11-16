@@ -1,24 +1,47 @@
 import requests
+from bs4 import BeautifulSoup
+import csv
 
-resource_id = "8e8e1b8f-6626-4a0b-93f8-9c99c4340797"
-base_url = "https://www.juntadeandalucia.es/datosabiertos/portal/api/3/action/datastore_search"
-query = "gimnasio sevilla"
-limit = 100
-offset = 0
-all_records = []
+# Función para obtener gimnasios de una página
+def obtener_gimnasios(pagina):
+    url = f'https://degimnasios.com/sevilla?page={pagina}'
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    gyms = soup.find_all('article', class_='property-item property-col-list mb-4')
+    datos = []
 
+    for gym in gyms:
+        nombre_tag = gym.find('h5', class_='property-title')
+        nombre = nombre_tag.get_text(strip=True) if nombre_tag else 'N/D'
+
+        direccion_tag = gym.find('address', class_='property-address')
+        direccion = direccion_tag.get_text(strip=True) if direccion_tag else 'N/D'
+
+        servicios = []
+        servicios_container = gym.find('div', class_='property-lable')
+        if servicios_container:
+            servicios = [span.get_text(strip=True) for span in servicios_container.find_all('span', class_='badge')]
+        servicios_str = ', '.join(servicios) if servicios else 'N/D'
+
+        datos.append([nombre, direccion, servicios_str])
+
+    return datos
+
+# Recoger datos de varias páginas
+todos_gimnasios = []
+pagina = 1
 while True:
-    params = {
-        "resource_id": resource_id,
-        "q": query,
-        "limit": limit,
-        "offset": offset
-    }
-    response = requests.get(base_url, params=params).json()
-    records = response["result"]["records"]
-    if not records:
+    resultado = obtener_gimnasios(pagina)
+    if not resultado:  # Si no hay más gimnasios en la página, terminar
         break
-    all_records.extend(records)
-    offset += limit
+    todos_gimnasios.extend(resultado)
+    print(f'Página {pagina} completada, {len(resultado)} gimnasios.')
+    pagina += 1
 
-print(f"Total gimnasios encontrados: {len(all_records)}")
+# Guardar en CSV
+with open('gimnasios_sevilla_completo.csv', 'w', newline='', encoding='utf-8') as f:
+    writer = csv.writer(f)
+    writer.writerow(['Nombre', 'Dirección', 'Servicios'])
+    writer.writerows(todos_gimnasios)
+
+print('Todos los gimnasios han sido guardados en gimnasio_sevilla_completo.csv')
